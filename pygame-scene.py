@@ -9,14 +9,17 @@ sofa_directory = os.environ["SOFA_ROOT"]
 import pygame
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from typing import List
 
 # Directory to the different logos
 logo_dir = "logos/kings-logo.png"
 
 # Create the pygame widnow size and flags for debugging and final demo
 display_size = (1920, 1080)
+display_center = (display_size[0] // 2, display_size[1] // 2)
 deb_flags = pygame.DOUBLEBUF | pygame.OPENGL
 flags = pygame.DOUBLEBUF | pygame.OPENGL | pygame.FULLSCREEN
+up_down_angle = 0
 
 class ImageLoader:
     
@@ -74,7 +77,7 @@ def init_display(node: SC.Node, im_loader: ImageLoader):
     pygame.display.init()
     pygame.display.set_mode(display_size, deb_flags)
     pygame.display.set_caption("Pygame logo")
-    # pygame.mouse.set_visible(False)
+    pygame.mouse.set_visible(False)
     glClearColor(1, 1, 1, 1)
     
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -111,13 +114,16 @@ def init_display(node: SC.Node, im_loader: ImageLoader):
 
     pygame.display.flip()
 
-def simple_render(rootNode: SC.Node, im_loader: ImageLoader):
+def simple_render(rootNode: SC.Node, im_loader: ImageLoader, mouse_move: List[int]):
+    global up_down_angle
     """
     Get the OpenGL context to render an image of the simulation state
 
     Args:
         rootNode (SC.Node): Sofa root node 
     """
+    keypress = pygame.key.get_pressed()
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     
     glMatrixMode(GL_PROJECTION)
@@ -141,8 +147,22 @@ def simple_render(rootNode: SC.Node, im_loader: ImageLoader):
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
     
+    up_down_angle += mouse_move[1]*0.1
+    glRotatef(up_down_angle, 1.0, 0.0, 0.0)
+
+    if keypress[pygame.K_w]:
+            glTranslatef(0,0,0.1)
+    if keypress[pygame.K_s]:
+        glTranslatef(0,0,-0.1)
+    if keypress[pygame.K_d]:
+        glTranslatef(-0.1,0,0)
+    if keypress[pygame.K_a]:
+        glTranslatef(0.1,0,0)
+
+    glRotatef(mouse_move[0]*0.05, 0.0, 1.0, 0.0)
+    
     cameraMVM = rootNode.camera.getOpenGLModelViewMatrix()
-    glMultMatrixd(cameraMVM)
+    glMultMatrixf(cameraMVM)
     SG.draw(rootNode)
 
     pygame.display.flip()
@@ -183,8 +203,9 @@ def createScene(root: SC.Node):
                             fieldOfView=45, zNear=0.63, zFar=55.69)
     
     sphere = root.addChild("Sphere")
-    sphere.addObject("MeshObjLoader", name="loader", filename="mesh/sphere.obj")
-    sphere.addObject("OglModel", src="@loader", color="white")
+    sphere.addObject("MeshObjLoader", name="loader", filename="mesh/cylinder.obj")
+    sphere.addObject("OglModel", rx=90, src="@loader", color="white")
+
 
 def main():
     SofaRuntime.importPlugin("SofaComponentAll")
@@ -194,16 +215,21 @@ def main():
     SS.init(root)
     init_display(root, im_loader)
     done = False
+    mouse_move = [0, 0]
+
+    pygame.mouse.set_pos(display_center)
 
     while not done:
         SS.animate(root, root.getDt())
         SS.updateVisual(root)
-        simple_render(root, im_loader)
+        simple_render(root, im_loader, mouse_move)
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     done = True
-                    break
+            if event.type == pygame.MOUSEMOTION:
+                mouse_move = [event.pos[i] - display_center[i] for i in range(2)]
+                pygame.mouse.set_pos(display_center) 
         time.sleep(root.getDt())
 
     pygame.quit()
