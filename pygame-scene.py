@@ -10,6 +10,7 @@ import pygame
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from typing import List
+from camera import CameraController
 
 # Directory to the different logos
 logo_dir = "logos/kings-logo.png"
@@ -20,6 +21,10 @@ display_center = (display_size[0] // 2, display_size[1] // 2)
 deb_flags = pygame.DOUBLEBUF | pygame.OPENGL
 flags = pygame.DOUBLEBUF | pygame.OPENGL | pygame.FULLSCREEN
 up_down_angle = 0
+in_out_zoom = 1
+left_right_angle = 0
+around_angle = 0
+translation = [0.0, 0.0, 0.0]
 
 class ImageLoader:
     
@@ -114,8 +119,8 @@ def init_display(node: SC.Node, im_loader: ImageLoader):
 
     pygame.display.flip()
 
-def simple_render(rootNode: SC.Node, im_loader: ImageLoader, mouse_move: List[int]):
-    global up_down_angle
+def simple_render(rootNode: SC.Node, im_loader: ImageLoader, mouse_move: List[int], zoom_mouse: int):
+    global up_down_angle, in_out_zoom, left_right_angle, around_angle
     """
     Get the OpenGL context to render an image of the simulation state
 
@@ -147,23 +152,44 @@ def simple_render(rootNode: SC.Node, im_loader: ImageLoader, mouse_move: List[in
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
     
-    up_down_angle += mouse_move[1]*0.1
-    glRotatef(up_down_angle, 1.0, 0.0, 0.0)
-
-    if keypress[pygame.K_w]:
-            glTranslatef(0,0,0.1)
-    if keypress[pygame.K_s]:
-        glTranslatef(0,0,-0.1)
-    if keypress[pygame.K_d]:
-        glTranslatef(-0.1,0,0)
-    if keypress[pygame.K_a]:
-        glTranslatef(0.1,0,0)
-
-    glRotatef(mouse_move[0]*0.05, 0.0, 1.0, 0.0)
+    
     
     cameraMVM = rootNode.camera.getOpenGLModelViewMatrix()
     glMultMatrixf(cameraMVM)
+    glMatrixMode(GL_MODELVIEW)  
+    modelMatrix= glGetFloatv(GL_MODELVIEW_MATRIX)
+
+    glPushMatrix()
+    # glLoadIdentity()
+
+    if keypress[pygame.K_w]:
+        translation[1] += 0.1
+    if keypress[pygame.K_s]:
+        translation[1] -= 0.1
+    if keypress[pygame.K_d]:
+        translation[0] += 0.1
+    if keypress[pygame.K_a]:
+        translation[0] -= 0.1
+    glTranslatef(translation[0],translation[1],translation[2])
+
+    # if keypress[pygame.K_DOWN]:
+    #     around_angle -= 0.5
+    # if keypress[pygame.K_UP]:
+    #     around_angle += 0.5
+    # glRotatef(around_angle, 0.0, 0.0, 1.0)
+
+    left_right_angle += mouse_move[0]*0.05
+    glRotatef(left_right_angle, 0.0, 1.0, 0.0)
+
+    up_down_angle += mouse_move[1]*0.05
+    glRotatef(up_down_angle, 1.0, 0.0, 0.0)
+
+    in_out_zoom += zoom_mouse * 0.1
+    glScalef(1.0, 1.0, in_out_zoom)
+    glMultMatrixf(modelMatrix)
+
     SG.draw(rootNode)
+    glPopMatrix()
 
     pygame.display.flip()
 
@@ -202,34 +228,47 @@ def createScene(root: SC.Node):
                             lookAt=[0,0,0], distance=30,
                             fieldOfView=45, zNear=0.63, zFar=55.69)
     
+    # root.addObject(CameraController(node=root))
+    
     sphere = root.addChild("Sphere")
-    sphere.addObject("MeshObjLoader", name="loader", filename="mesh/cylinder.obj")
-    sphere.addObject("OglModel", rx=90, src="@loader", color="white")
+    sphere.addObject("MeshObjLoader", name="loader", filename="mesh/liver.obj")
+    sphere.addObject("OglModel", src="@loader", color="red")
 
 
 def main():
     SofaRuntime.importPlugin("SofaComponentAll")
-    im_loader=ImageLoader(640, 400)
+    im_loader=ImageLoader(10, 10)
     root = SC.Node("root")
     createScene(root)
     SS.init(root)
     init_display(root, im_loader)
     done = False
     mouse_move = [0, 0]
+    zoom_mouse = 0.0
+    paused = False
 
     pygame.mouse.set_pos(display_center)
 
     while not done:
         SS.animate(root, root.getDt())
         SS.updateVisual(root)
-        simple_render(root, im_loader, mouse_move)
+        if not paused:
+            simple_render(root, im_loader, mouse_move, zoom_mouse)
+        zoom_mouse = 0.0
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+                if event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
                     done = True
-            if event.type == pygame.MOUSEMOTION:
-                mouse_move = [event.pos[i] - display_center[i] for i in range(2)]
-                pygame.mouse.set_pos(display_center) 
+                if event.key == pygame.K_PAUSE or event.key == pygame.K_p:
+                    paused = not paused
+                    pygame.mouse.set_pos(display_center)
+
+            if not paused:
+                if event.type == pygame.MOUSEMOTION:
+                    mouse_move = [event.pos[i] - display_center[i] for i in range(2)]
+                    pygame.mouse.set_pos(display_center)
+                if event.type == pygame.MOUSEWHEEL:
+                    zoom_mouse = -event.y
         time.sleep(root.getDt())
 
     pygame.quit()
