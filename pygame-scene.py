@@ -10,7 +10,6 @@ import pygame
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from typing import List
-from camera import CameraController
 
 # Directory to the different logos
 logo_dir = "logos/kings-logo.png"
@@ -152,25 +151,29 @@ def simple_render(rootNode: SC.Node, im_loader: ImageLoader, mouse_move: List[in
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
     
-    
-    
+    # Get the projection from the Sofa scene
     cameraMVM = rootNode.camera.getOpenGLModelViewMatrix()
     glMultMatrixf(cameraMVM)
     glMatrixMode(GL_MODELVIEW)  
     modelMatrix= glGetFloatv(GL_MODELVIEW_MATRIX)
 
+    #### Start the camera movement ####
     glPushMatrix()
     # glLoadIdentity()
 
+    # Move the object around
     if keypress[pygame.K_w]:
-        translation[1] += 0.1
+        translation[2] -= 0.1
     if keypress[pygame.K_s]:
-        translation[1] -= 0.1
+        translation[2] += 0.1
     if keypress[pygame.K_d]:
         translation[0] += 0.1
     if keypress[pygame.K_a]:
         translation[0] -= 0.1
-    glTranslatef(translation[0],translation[1],translation[2])
+
+    # Zoom the object with the mouse wheel
+    in_out_zoom += zoom_mouse * 0.5
+    glTranslatef(translation[0], in_out_zoom, translation[2])
 
     # if keypress[pygame.K_DOWN]:
     #     around_angle -= 0.5
@@ -178,14 +181,15 @@ def simple_render(rootNode: SC.Node, im_loader: ImageLoader, mouse_move: List[in
     #     around_angle += 0.5
     # glRotatef(around_angle, 0.0, 0.0, 1.0)
 
+    # Rotate the object from left to right
     left_right_angle += mouse_move[0]*0.05
     glRotatef(left_right_angle, 0.0, 1.0, 0.0)
 
+    # Rotate the object up and down
     up_down_angle += mouse_move[1]*0.05
     glRotatef(up_down_angle, 1.0, 0.0, 0.0)
 
-    in_out_zoom += zoom_mouse * 0.1
-    glScalef(1.0, 1.0, in_out_zoom)
+    # Transform the original view    
     glMultMatrixf(modelMatrix)
 
     SG.draw(rootNode)
@@ -268,7 +272,7 @@ def main():
                     mouse_move = [event.pos[i] - display_center[i] for i in range(2)]
                     pygame.mouse.set_pos(display_center)
                 if event.type == pygame.MOUSEWHEEL:
-                    zoom_mouse = -event.y
+                    zoom_mouse = event.y
         time.sleep(root.getDt())
 
     pygame.quit()
